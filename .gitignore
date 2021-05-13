@@ -1,6 +1,7 @@
 # Prerequisites
 *.d
-
+/build/
+/win_build/
 # Object files
 *.o
 *.ko
