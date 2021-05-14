@@ -97,7 +97,7 @@ uint8_t arzhe_sdcard_init(){
         .allocation_unit_size = 16 * 1024
     };
     const char mount_point[] = MOUNT_POINT;
-    ESP_LOGD(TAG, "Initializing SD card");
+    ESP_LOGD(TAG, "Mountting SD card");
 
     // sdmmc_card_t* card;
     sdmmc_host_t host = SDMMC_HOST_DEFAULT();
@@ -121,6 +121,7 @@ uint8_t arzhe_sdcard_init(){
         }
         return 0;
     }
+    ESP_LOGI(TAG, "Mount card success!!");
     g_flag_mounted = true;
     return 1;
 }
@@ -136,6 +137,10 @@ void arzhe_sdcard_unmount(){
         ESP_LOGE(TAG, "SDCARD IS NOT MOUNTED");
     }
     
+}
+
+uint8_t arzhe_sdcard_ismount(){
+    return g_flag_mounted;
 }
 
 uint8_t arzhe_sdcard_new(FIL *fp, char* path){

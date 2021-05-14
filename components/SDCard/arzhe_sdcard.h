@@ -46,6 +46,7 @@ unsigned char arzhe_sdcard_read(char* path, void* buf,unsigned int byte2Read);
 unsigned char arzhe_sdcard_write_p(FIL *fp, const void* buf, uint_t byte2Write, unsigned int pos);
 unsigned int arzhe_sdcard_get_file_size(FIL *fp);
 unsigned char arzhe_sdcard_close(FIL *fp);
+uint8_t arzhe_sdcard_ismount();
 
 #ifdef __cplusplus
 }
