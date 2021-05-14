@@ -15,6 +15,7 @@ protected:
 
 public:
     I2SMEMSSampler(i2s_pin_config_t &i2sPins, bool fixSPH0645 = false);
+    I2SMEMSSampler(int i2sSCK, int i2sSD, int i2sWS, int i2sOUT = I2S_PIN_NO_CHANGE, bool fixSPH0645 = false);
     void start(TaskHandle_t writerTaskHandle);
 };
 
