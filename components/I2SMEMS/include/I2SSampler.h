@@ -4,6 +4,9 @@
 #include <FreeRTOS/FreeRTOS.h>
 #include <FreeRTOS/task.h>
 #include "driver/i2s.h"
+#include "RingBuffer.h"
+
+#define AUDIO_BUFFER_COUNT  11
 
 /**
  * Base Class for both the ADC and I2S sampler
@@ -11,23 +14,13 @@
 class I2SSampler
 {
 private:
-    // double buffer so we can be capturing samples while sending data
-    int16_t *m_audioBuffer1;
-    int16_t *m_audioBuffer2;
-    // current position in the audio buffer
-    int32_t m_audioBufferPos = 0;
-    // current audio buffer
-    int16_t *m_currentAudioBuffer;
-    // buffer containing samples that have been captured already
-    int16_t *m_capturedAudioBuffer;
-    // size of the audio buffers in bytes
-    int32_t m_bufferSizeInBytes;
-    // size of the audio buffer in samples
-    int32_t m_bufferSizeInSamples;
+    AudioBuffer *m_audio_buffers[AUDIO_BUFFER_COUNT];
+    RingBufferAccessor *m_write_ring_buffer_accessor;
+
     // I2S reader task
     TaskHandle_t m_readerTaskHandle;
     // writer task
-    TaskHandle_t m_writerTaskHandle;
+    TaskHandle_t m_process_task_handle;
     // i2s reader queue
     QueueHandle_t m_i2sQueue;
     // i2s port
@@ -43,16 +36,20 @@ protected:
     }
 
 public:
-    int32_t getBufferSizeInBytes()
-    {
-        return m_bufferSizeInBytes;
-    };
-    int16_t *getCapturedAudioBuffer()
-    {
-        return m_capturedAudioBuffer;
-    }
-    void start(i2s_port_t i2sPort, i2s_config_t &i2sConfig, int32_t bufferSizeInSamples, TaskHandle_t writerTaskHandle);
+    I2SSampler();
+    void start(i2s_port_t i2s_port, i2s_config_t &i2s_config, TaskHandle_t processor_task_handle);
+    void start(i2s_port_t i2s_port, TaskHandle_t processor_task_handle);
+    RingBufferAccessor *getRingBufferReader();
 
+    int getCurrWritePos()
+    {
+        return m_write_ring_buffer_accessor->getIndex();
+    }
+    int getRingBufSize()
+    {
+        return AUDIO_BUFFER_COUNT * SAMPLE_BUFFER_SIZE;
+    }
+    
     friend void i2sReaderTask(void *param);
 };
 
