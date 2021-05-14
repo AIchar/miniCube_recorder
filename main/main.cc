@@ -20,6 +20,8 @@
 #include "lwip/sys.h"
 
 // #include "I2SSampler.h"
+#include "miniCube_conifg.h"
+#include "button.h"
 #include "I2SMEMSSampler.h"
 #include "arzhe_sdcard.h"
 #include "arzhe_wave.h"
@@ -46,6 +48,7 @@ static const char *TAG = "wifi station";
 
 static int s_retry_num = 0;
 I2SSampler *i2sSampler = NULL;
+uint8_t flag_recoder = 0;
 
 static void event_handler(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data)
@@ -161,32 +164,81 @@ void i2sMemsWriterTask(void *param)
   {
     // wait for some samples to save
     uint32_t ulNotificationValue = ulTaskNotifyTake(pdTRUE, xMaxBlockTime);
-    if (ulNotificationValue > 0)
+    if (ulNotificationValue > 0 && flag_recoder == 1)
     {
         // audioBuffer = sampler->getCapturedAudioBuffer();
     //   sendData(wifiClientI2S, httpClientI2S, I2S_SERVER_URL, (uint8_t *)sampler->getCapturedAudioBuffer(), sampler->getBufferSizeInBytes());
-        if (recoder_num<20)
+        if (recoder_num==0)
         {
-            arzhe_sdcard_write(&file, sampler->getCapturedAudioBuffer(), sampler->getBufferSizeInBytes());
-            ESP_LOGI(TAG, "RECODE SUCCESS");
-            recoder_num++;
-        }
-        
-        else if (recoder_num == 20)
-        {
-            recoder_num++;
-            arzhe_sdcard_close(&file);
-            ESP_LOGI(TAG, "RECODE END");
-        }
-        
-        // for (int i = 0; i < sampler->getBufferSizeInBytes()/2; i++)
-        // {
-        //     ets_printf("%d\n", audioBuffer[i]);
-        //     // ets_printf(".");
-        // }
-        
+            ESP_LOGI(TAG, "RECODEDING!!!!");
+            recoder_num+=1;
+            continue;
+        }else{
+            // arzhe_sdcard_write(&file, sampler->getCapturedAudioBuffer(), sampler->getBufferSizeInBytes());
+            // ESP_LOGI(TAG, "RECODE SUCCESS");
+            // arzhe_sdcard_close(&file);
+            // ESP_LOGI(TAG, "RECODE END");
+            // recoder_num=0;
+            // flag_recoder = 0;
+        }  
     }
   }
+}
+
+void task_new_recoder(void *param){
+
+    char path[64] = {0};
+    int16_t writeBuf[1600];
+    static int index = 0;
+    int last_audio_pos = i2sSampler->getCurrWritePos();
+    RingBufferAccessor *reader = i2sSampler->getRingBufferReader();
+    reader->setIndex(last_audio_pos);
+    reader->rewind(16000);
+    uint8_t ret;
+    do
+    {
+        memset(path, 0, sizeof(path));
+        sprintf(path,"/dw%04d.wav", index++);
+        ret = arzhe_sdcard_nwav(&file, path, 16000*2*1);
+        if (ret == 1)
+        {
+            flag_recoder = 1;
+            for (int i = 0; i < 10; i++)
+            {
+                for (int j = 0; j < 1600; j++)
+                {
+                    writeBuf[j] = reader->getCurrentSample();
+                    reader->moveToNextSample();
+                }
+                arzhe_sdcard_write(&file, writeBuf, 1600*2);
+            }
+            arzhe_sdcard_close(&file);
+            ESP_LOGI(TAG, "RECODER END");
+            break;
+        }
+    } while (ret == 2);
+    flag_recoder=0;
+    vTaskDelete(NULL);
+}
+
+void button_power_short_press(){
+    ESP_LOGI(TAG, "BUTTON POWER SHORT PRESS!!");
+    if(flag_recoder == 1){
+        return;
+    }
+    xTaskCreate(task_new_recoder, "new recoder Task", 1024 * 8, NULL, 1, NULL);
+}
+
+void button_power_long_press(){
+    ESP_LOGI(TAG, "BUTTON POWER LONG PRESS!!");
+    if (arzhe_sdcard_ismount())
+    {
+        /* code */
+        arzhe_sdcard_unmount();
+    } else { 
+        arzhe_sdcard_init();
+    }
+    
 }
 
 
@@ -201,57 +253,31 @@ extern "C" void app_main(void)
     ESP_ERROR_CHECK(ret);
 
     // i2s config for reading from both channels of I2S
-    i2s_config_t i2sMemsConfigBothChannels = {
-        .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX),
-        .sample_rate = 16000,
-        .bits_per_sample = I2S_BITS_PER_SAMPLE_32BIT,
-        .channel_format = I2S_CHANNEL_FMT_ONLY_RIGHT,
-        .communication_format = I2S_COMM_FORMAT_STAND_I2S,
-        .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
-        .dma_buf_count = 4,
-        .dma_buf_len = 1024,
-        .use_apll = false,
-        .tx_desc_auto_clear = false,
-        .fixed_mclk = 0};
-
-    // i2s pins
-    i2s_pin_config_t i2sPins = {
-        .bck_io_num = GPIO_NUM_33,
-        .ws_io_num = GPIO_NUM_32,
-        .data_out_num = I2S_PIN_NO_CHANGE,
-        .data_in_num = GPIO_NUM_35};        
+     
 
 
-    // ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
-    // wifi_init_sta();
+    // // wifi_init_sta();
 
 
     if(arzhe_sdcard_init() == 1){
-        ESP_LOGI(TAG, "CARD INIT SUCCESS");
+        ESP_LOGI(TAG, "CARD MOUNT SUCCESS");
         arzhe_print_card_info();
         arzhe_sdcard_get_list(NULL);
         // arzhe_sdcard_unmount();
     }
-    if (arzhe_sdcard_nwav(&file, (char*)"/reco32.wav", 16000*2*20) == 1)
-    {
-        ESP_LOGI(TAG, "create success");
-        // char sendBuf[] = {"hahhaha test success"};
-        // arzhe_sdcard_write(&file,(void*)sendBuf, strlen(sendBuf));
-        // arzhe_sdcard_close(&file);
-    }
 
-    // arzhe_sdcard_read((char*)"/test3.txt", (void*)readBuf, 64);
-    // ESP_LOGI(TAG, "READ %s", readBuf);
 
     // Direct i2s input from INMP441 or the SPH0645
-    i2sSampler = new I2SMEMSSampler(i2sPins, false);
+    i2sSampler = new I2SMEMSSampler(GPIO_MIC_SCK, GPIO_MIC_SD, GPIO_MIC_WS);
 
     // set up the i2s sample writer task
     TaskHandle_t i2sMemsWriterTaskHandle;
     xTaskCreatePinnedToCore(i2sMemsWriterTask, "I2S Writer Task", 4096, i2sSampler, 1, &i2sMemsWriterTaskHandle, 1);
 
-    // start sampling from i2s device
-    i2sSampler->start(I2S_NUM_1, i2sMemsConfigBothChannels, 16000*2*1, i2sMemsWriterTaskHandle);
-    // vTaskDelay(10000 / portTICK_PERIOD_MS);
-    // esp_restart();
+    // // start sampling from i2s device
+    i2sSampler->start(I2S_NUM_1, i2sMemsWriterTaskHandle);
+    // // vTaskDelay(10000 / portTICK_PERIOD_MS);
+    // // esp_restart();
+    button_press_init((gpio_num_t)BUTTOM_POWER, (button_cb)button_power_short_press, (button_cb)button_power_long_press);
+
 }
