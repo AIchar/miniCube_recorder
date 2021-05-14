@@ -188,7 +188,7 @@ uint8_t arzhe_sdcard_nwav(FIL *fp, char* path, uint32_t wavLen){
         .data.Subchunk2Size = wavLen,
     };
 
-
+    ESP_LOGI(TAG, "openning %s", path);
     ret = f_open(fp, path, FA_CREATE_NEW | FA_WRITE);
     switch (ret)
     {
@@ -208,7 +208,11 @@ uint8_t arzhe_sdcard_nwav(FIL *fp, char* path, uint32_t wavLen){
         break;
     case FR_WRITE_PROTECTED:
         ESP_LOGE(TAG, "FR_WRITE_PROTECTED");
-        break;   
+        break;  
+    case FR_EXIST:
+        ESP_LOGI(TAG, "file is exist");
+        return 2;
+        break; 
     default:
         ESP_LOGE(TAG, "UNKNOWN error :%d", ret);
         break;
